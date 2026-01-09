@@ -43,6 +43,10 @@
     .status {
       font-weight: 600;
       margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
     }
 
     .maze-wrapper {
@@ -106,13 +110,64 @@
       font-size: 14px;
       color: #555;
     }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .maze-button {
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 999px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 8px 16px rgba(42, 125, 225, 0.2);
+    }
+
+    .maze-button:hover {
+      background: #1c6bcc;
+    }
+
+    .coin {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: #f7f0d5;
+      color: #7c5b00;
+      font-weight: 700;
+      border: 2px solid #d1a12d;
+    }
+
+    .coin-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, #ffe59a, #e2b23b);
+      border: 2px solid #b88215;
+      display: grid;
+      place-items: center;
+      font-size: 14px;
+      color: #6d4b00;
+      font-weight: 800;
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>Mnożenie i dzielenie w zakresie 0–30</h1>
     <p>Wstaw brakujące liczby, aby równania w labiryncie były prawdziwe. Kliknij pole i wpisz liczbę.</p>
-    <div class="status" id="status"></div>
+    <div class="controls">
+      <button class="maze-button" id="newMaze">Nowy labirynt</button>
+      <div class="status" id="status"></div>
+    </div>
     <div class="legend">Zakres liczb: 0–30</div>
   </header>
 
@@ -123,44 +178,103 @@
   <script>
     const mazeElement = document.getElementById("maze");
     const statusElement = document.getElementById("status");
+    const newMazeButton = document.getElementById("newMaze");
 
     const rows = 13;
     const cols = 17;
     document.documentElement.style.setProperty("--rows", rows);
     document.documentElement.style.setProperty("--cols", cols);
 
-    const grid = Array.from({ length: rows }, () => Array.from({ length: cols }, () => null));
+    const layoutPlacements = [
+      { direction: "horizontal", row: 1, col: 1 },
+      { direction: "vertical", row: 1, col: 1 },
+      { direction: "horizontal", row: 3, col: 3 },
+      { direction: "vertical", row: 1, col: 5 },
+      { direction: "horizontal", row: 5, col: 1 },
+      { direction: "vertical", row: 2, col: 9 },
+      { direction: "horizontal", row: 6, col: 9 },
+      { direction: "horizontal", row: 7, col: 3 },
+      { direction: "horizontal", row: 9, col: 6 },
+      { direction: "vertical", row: 6, col: 13 },
+      { direction: "horizontal", row: 10, col: 1 }
+    ];
 
-    const setCell = (row, col, cell) => {
+    const inputs = [];
+
+    const buildEmptyGrid = () =>
+      Array.from({ length: rows }, () => Array.from({ length: cols }, () => null));
+
+    const setCell = (grid, row, col, cell) => {
       grid[row][col] = cell;
     };
 
-    const placeHorizontal = (row, colStart, items) => {
-      items.forEach((item, index) => setCell(row, colStart + index, item));
+    const placeHorizontal = (grid, row, colStart, items) => {
+      items.forEach((item, index) => setCell(grid, row, colStart + index, item));
     };
 
-    const placeVertical = (rowStart, col, items) => {
-      items.forEach((item, index) => setCell(rowStart + index, col, item));
+    const placeVertical = (grid, rowStart, col, items) => {
+      items.forEach((item, index) => setCell(grid, rowStart + index, col, item));
     };
 
     const inputCell = (answer) => ({ type: "input", answer: String(answer) });
 
-    placeHorizontal(1, 1, ["10", "·", inputCell(3), "=", "30"]);
-    placeVertical(1, 1, ["10", "=", "5", "·", inputCell(2)]);
-    placeHorizontal(3, 3, ["5", "·", inputCell(5), "=", "25"]);
-    placeVertical(1, 5, ["30", ":", inputCell(5), "=", "6"]);
-    placeHorizontal(5, 1, [inputCell(2), "·", "6", "=", "12"]);
-    placeVertical(2, 9, ["16", ":", "4", "=", "4"]);
-    placeHorizontal(6, 9, ["4", "·", inputCell(5), "=", "20"]);
-    placeHorizontal(7, 3, ["9", "·", inputCell(3), "=", "27"]);
-    placeHorizontal(9, 6, ["7", "·", inputCell(4), "=", "28"]);
-    placeVertical(6, 13, ["20", ":", "4", "=", "5"]);
-    placeHorizontal(10, 1, ["21", ":", "7", "=", "3"]);
+    const randomPick = (items) => items[Math.floor(Math.random() * items.length)];
 
-    const inputs = [];
+    const multiplicationPairs = [];
+    for (let a = 1; a <= 10; a += 1) {
+      for (let b = 1; b <= 10; b += 1) {
+        const product = a * b;
+        if (product <= 30) {
+          multiplicationPairs.push({ a, b, c: product });
+        }
+      }
+    }
 
-    function renderGrid() {
+    const createMultiplicationEquation = () => {
+      const { a, b, c } = randomPick(multiplicationPairs);
+      const missing = randomPick(["a", "b", "c"]);
+      if (missing === "a") {
+        return [inputCell(a), "·", String(b), "=", String(c)];
+      }
+      if (missing === "b") {
+        return [String(a), "·", inputCell(b), "=", String(c)];
+      }
+      return [String(a), "·", String(b), "=", inputCell(c)];
+    };
+
+    const createDivisionEquation = () => {
+      const { a: divisor, b: quotient, c: dividend } = randomPick(multiplicationPairs);
+      const missing = randomPick(["dividend", "divisor", "quotient"]);
+      if (missing === "dividend") {
+        return [inputCell(dividend), ":", String(divisor), "=", String(quotient)];
+      }
+      if (missing === "divisor") {
+        return [String(dividend), ":", inputCell(divisor), "=", String(quotient)];
+      }
+      return [String(dividend), ":", String(divisor), "=", inputCell(quotient)];
+    };
+
+    const createEquation = () => {
+      const choice = Math.random() > 0.5 ? "multiply" : "divide";
+      return choice === "multiply" ? createMultiplicationEquation() : createDivisionEquation();
+    };
+
+    const buildGrid = () => {
+      const grid = buildEmptyGrid();
+      layoutPlacements.forEach((placement) => {
+        const equation = createEquation();
+        if (placement.direction === "horizontal") {
+          placeHorizontal(grid, placement.row, placement.col, equation);
+        } else {
+          placeVertical(grid, placement.row, placement.col, equation);
+        }
+      });
+      return grid;
+    };
+
+    function renderGrid(grid) {
       mazeElement.innerHTML = "";
+      inputs.length = 0;
       grid.forEach((row) => {
         row.forEach((cell) => {
           const cellElement = document.createElement("div");
@@ -208,7 +322,13 @@
 
     function updateStatus() {
       const correct = inputs.filter((input) => input.value.trim() === input.dataset.answer);
-      statusElement.textContent = `Poprawne: ${correct.length} / ${inputs.length}`;
+      statusElement.innerHTML = `Poprawne: ${correct.length} / ${inputs.length}`;
+      if (inputs.length && correct.length === inputs.length) {
+        const coin = document.createElement("span");
+        coin.className = "coin";
+        coin.innerHTML = '<span class="coin-icon">1 zł</span> Brawo! Zdobywasz monetę.';
+        statusElement.appendChild(coin);
+      }
     }
 
     function updateCellSize() {
@@ -221,8 +341,15 @@
 
     window.addEventListener("resize", updateCellSize);
     updateCellSize();
-    renderGrid();
-    updateStatus();
+
+    const generateMaze = () => {
+      const grid = buildGrid();
+      renderGrid(grid);
+      updateStatus();
+    };
+
+    newMazeButton.addEventListener("click", generateMaze);
+    generateMaze();
   </script>
 </body>
 </html>
