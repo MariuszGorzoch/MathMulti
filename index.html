@@ -185,7 +185,7 @@
     document.documentElement.style.setProperty("--rows", rows);
     document.documentElement.style.setProperty("--cols", cols);
 
-    const placementCount = 11;
+    const placementCount = 8;
     const equationLength = 5;
     let lastLayoutSignature = null;
 
@@ -226,17 +226,18 @@
         return cells;
       };
 
-      const hasAdjacentConnection = (cells, occupied) =>
+      const isTooClose = (cells, occupied) =>
         cells.some(({ row, col }) => {
-          const neighbors = [
-            { row: row - 1, col },
-            { row: row + 1, col },
-            { row, col: col - 1 },
-            { row, col: col + 1 }
-          ];
-          return neighbors.some(
-            (neighbor) => isWithinBounds(neighbor.row, neighbor.col) && occupied[neighbor.row][neighbor.col]
-          );
+          for (let rowOffset = -1; rowOffset <= 1; rowOffset += 1) {
+            for (let colOffset = -1; colOffset <= 1; colOffset += 1) {
+              const neighborRow = row + rowOffset;
+              const neighborCol = col + colOffset;
+              if (isWithinBounds(neighborRow, neighborCol) && occupied[neighborRow][neighborCol]) {
+                return true;
+              }
+            }
+          }
+          return false;
         });
 
       for (let attempt = 0; attempt < 50; attempt += 1) {
@@ -258,7 +259,7 @@
               continue;
             }
 
-            if (index > 0 && !hasAdjacentConnection(cells, occupied)) {
+            if (isTooClose(cells, occupied)) {
               continue;
             }
 
