@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Labirynt Matematyczny 0–30</title>
+  <style>
+    :root {
+      --cell-size: 44px;
+      --wall: #2f2f2f;
+      --path: #f7f7f7;
+      --start: #d7f5d2;
+      --exit: #ffe5d1;
+      --player: #2a7de1;
+    }
+
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: #ffffff;
+      margin: 0;
+      padding: 24px;
+      color: #1d1d1f;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 26px;
+    }
+
+    p {
+      margin: 0 0 18px;
+      line-height: 1.5;
+    }
+
+    .game {
+      display: grid;
+      grid-template-columns: minmax(280px, 360px) 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    .panel {
+      background: #f8f8fb;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+    }
+
+    .maze {
+      display: grid;
+      grid-auto-rows: var(--cell-size);
+      background: var(--wall);
+      padding: 8px;
+      border-radius: 12px;
+      width: fit-content;
+    }
+
+    .cell {
+      width: var(--cell-size);
+      height: var(--cell-size);
+      background: var(--path);
+      position: relative;
+    }
+
+    .cell.start {
+      background: var(--start);
+    }
+
+    .cell.exit {
+      background: var(--exit);
+    }
+
+    .cell.player::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--player);
+      box-shadow: 0 0 0 4px rgba(42, 125, 225, 0.2);
+    }
+
+    .question {
+      display: grid;
+      gap: 12px;
+    }
+
+    .options {
+      display: grid;
+      gap: 10px;
+    }
+
+    button.option {
+      background: #ffffff;
+      border: 2px solid #d0d4dc;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 16px;
+      text-align: left;
+      cursor: pointer;
+      transition: border 0.2s, transform 0.1s;
+    }
+
+    button.option:hover {
+      border-color: #2a7de1;
+      transform: translateY(-1px);
+    }
+
+    .status {
+      min-height: 24px;
+      font-weight: 600;
+    }
+
+    .status.good {
+      color: #17723f;
+    }
+
+    .status.bad {
+      color: #b21c1c;
+    }
+
+    .controls {
+      margin-top: 16px;
+    }
+
+    .controls button {
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: none;
+      background: #2a7de1;
+      color: #ffffff;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    .legend {
+      margin-top: 16px;
+      font-size: 14px;
+      color: #555;
+    }
+
+    @media (max-width: 900px) {
+      .game {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Mnożenie i dzielenie w zakresie 0–30</h1>
+  <p>
+    Wybierz poprawne równanie, aby podążać właściwą ścieżką labiryntu.
+    Jedno z równań zawsze prowadzi do wyjścia, a pozostałe są fałszywe.
+  </p>
+
+  <section class="game">
+    <div class="panel">
+      <div class="question">
+        <div><strong>Gdzie iść dalej?</strong></div>
+        <div class="options" id="options"></div>
+        <div class="status" id="status"></div>
+      </div>
+      <div class="controls">
+        <button id="restart">Nowy labirynt</button>
+      </div>
+      <div class="legend">
+        <div>🟢 Start • 🟠 Wyjście • 🔵 Ty</div>
+        <div>Zakres liczb: 0–30</div>
+      </div>
+    </div>
+    <div class="maze" id="maze"></div>
+  </section>
+
+  <script>
+    const mazeElement = document.getElementById("maze");
+    const optionsElement = document.getElementById("options");
+    const statusElement = document.getElementById("status");
+    const restartButton = document.getElementById("restart");
+
+    const width = 10;
+    const height = 10;
+
+    let maze = [];
+    let player = { x: 0, y: 0 };
+    let solutionMap = new Map();
+
+    const directions = [
+      { dx: 0, dy: -1, name: "Góra", arrow: "↑", wall: "top", opposite: "bottom" },
+      { dx: 1, dy: 0, name: "Prawo", arrow: "→", wall: "right", opposite: "left" },
+      { dx: 0, dy: 1, name: "Dół", arrow: "↓", wall: "bottom", opposite: "top" },
+      { dx: -1, dy: 0, name: "Lewo", arrow: "←", wall: "left", opposite: "right" },
+    ];
+
+    function createCell(x, y) {
+      return {
+        x,
+        y,
+        walls: { top: true, right: true, bottom: true, left: true },
+        visited: false,
+      };
+    }
+
+    function buildMaze() {
+      maze = Array.from({ length: height }, (_, y) =>
+        Array.from({ length: width }, (_, x) => createCell(x, y))
+      );
+
+      const stack = [];
+      const start = maze[0][0];
+      start.visited = true;
+      stack.push(start);
+
+      while (stack.length) {
+        const current = stack[stack.length - 1];
+        const neighbors = directions
+          .map((dir) => {
+            const nx = current.x + dir.dx;
+            const ny = current.y + dir.dy;
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height) return null;
+            const neighbor = maze[ny][nx];
+            if (neighbor.visited) return null;
+            return { neighbor, dir };
+          })
+          .filter(Boolean);
+
+        if (!neighbors.length) {
+          stack.pop();
+          continue;
+        }
+
+        const { neighbor, dir } = neighbors[Math.floor(Math.random() * neighbors.length)];
+        current.walls[dir.wall] = false;
+        neighbor.walls[dir.opposite] = false;
+        neighbor.visited = true;
+        stack.push(neighbor);
+      }
+    }
+
+    function computeSolution() {
+      const queue = [{ x: 0, y: 0 }];
+      const parent = new Map();
+      const key = (x, y) => `${x},${y}`;
+      parent.set(key(0, 0), null);
+
+      while (queue.length) {
+        const { x, y } = queue.shift();
+        if (x === width - 1 && y === height - 1) break;
+        const cell = maze[y][x];
+        directions.forEach((dir) => {
+          if (cell.walls[dir.wall]) return;
+          const nx = x + dir.dx;
+          const ny = y + dir.dy;
+          const nextKey = key(nx, ny);
+          if (parent.has(nextKey)) return;
+          parent.set(nextKey, { x, y });
+          queue.push({ x: nx, y: ny });
+        });
+      }
+
+      solutionMap = new Map();
+      let cursor = { x: width - 1, y: height - 1 };
+      while (cursor) {
+        const prev = parent.get(key(cursor.x, cursor.y));
+        if (prev) {
+          solutionMap.set(key(prev.x, prev.y), cursor);
+        }
+        cursor = prev;
+      }
+    }
+
+    function renderMaze() {
+      mazeElement.innerHTML = "";
+      mazeElement.style.gridTemplateColumns = `repeat(${width}, var(--cell-size))`;
+
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          const cell = maze[y][x];
+          const cellElement = document.createElement("div");
+          cellElement.className = "cell";
+          cellElement.style.borderTop = cell.walls.top ? "3px solid var(--wall)" : "3px solid transparent";
+          cellElement.style.borderRight = cell.walls.right ? "3px solid var(--wall)" : "3px solid transparent";
+          cellElement.style.borderBottom = cell.walls.bottom ? "3px solid var(--wall)" : "3px solid transparent";
+          cellElement.style.borderLeft = cell.walls.left ? "3px solid var(--wall)" : "3px solid transparent";
+
+          if (x === 0 && y === 0) cellElement.classList.add("start");
+          if (x === width - 1 && y === height - 1) cellElement.classList.add("exit");
+          if (x === player.x && y === player.y) cellElement.classList.add("player");
+
+          mazeElement.appendChild(cellElement);
+        }
+      }
+    }
+
+    function randomInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function buildValidEquation() {
+      const useMultiply = Math.random() < 0.5;
+      if (useMultiply) {
+        let a = 0;
+        let b = 0;
+        let result = 0;
+        do {
+          a = randomInt(0, 30);
+          b = randomInt(0, 30);
+          result = a * b;
+        } while (result > 30);
+        return { text: `${a} · ${b} = ${result}`, result };
+      }
+
+      let divisor = 1;
+      let quotient = 0;
+      let dividend = 0;
+      do {
+        divisor = randomInt(1, 30);
+        quotient = randomInt(0, 30);
+        dividend = divisor * quotient;
+      } while (dividend > 30);
+      return { text: `${dividend} : ${divisor} = ${quotient}`, result: quotient };
+    }
+
+    function buildEquation(valid) {
+      const eq = buildValidEquation();
+      if (valid) return eq.text;
+      let wrong = eq.result;
+      while (wrong === eq.result) {
+        wrong = randomInt(0, 30);
+      }
+      return eq.text.replace(`${eq.result}`, `${wrong}`);
+    }
+
+    function availableMoves() {
+      const cell = maze[player.y][player.x];
+      return directions.filter((dir) => !cell.walls[dir.wall]);
+    }
+
+    function nextCorrectDirection() {
+      const key = `${player.x},${player.y}`;
+      const next = solutionMap.get(key);
+      if (!next) return null;
+      return directions.find((dir) => player.x + dir.dx === next.x && player.y + dir.dy === next.y);
+    }
+
+    function updateQuestion() {
+      optionsElement.innerHTML = "";
+      statusElement.textContent = "";
+      statusElement.className = "status";
+
+      if (player.x === width - 1 && player.y === height - 1) {
+        statusElement.textContent = "Brawo! Dotarłeś do wyjścia.";
+        statusElement.classList.add("good");
+        return;
+      }
+
+      const moves = availableMoves();
+      const correct = nextCorrectDirection();
+
+      moves.forEach((dir) => {
+        const isCorrect = correct && dir.name === correct.name;
+        const button = document.createElement("button");
+        button.className = "option";
+        button.innerHTML = `${dir.arrow} ${dir.name} — <strong>${buildEquation(isCorrect)}</strong>`;
+        button.addEventListener("click", () => handleMove(dir, isCorrect));
+        optionsElement.appendChild(button);
+      });
+    }
+
+    function handleMove(dir, isCorrect) {
+      if (!isCorrect) {
+        statusElement.textContent = "To równanie jest fałszywe. Spróbuj jeszcze raz.";
+        statusElement.className = "status bad";
+        return;
+      }
+
+      player.x += dir.dx;
+      player.y += dir.dy;
+      statusElement.textContent = "Świetnie! Idziesz dalej.";
+      statusElement.className = "status good";
+      renderMaze();
+      updateQuestion();
+    }
+
+    function startGame() {
+      buildMaze();
+      computeSolution();
+      player = { x: 0, y: 0 };
+      renderMaze();
+      updateQuestion();
+    }
+
+    restartButton.addEventListener("click", startGame);
+
+    startGame();
+  </script>
+</body>
+</html>
