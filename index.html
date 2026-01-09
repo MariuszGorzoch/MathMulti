@@ -185,19 +185,9 @@
     document.documentElement.style.setProperty("--rows", rows);
     document.documentElement.style.setProperty("--cols", cols);
 
-    const layoutPlacements = [
-      { direction: "horizontal", row: 1, col: 1 },
-      { direction: "vertical", row: 1, col: 1 },
-      { direction: "horizontal", row: 3, col: 3 },
-      { direction: "vertical", row: 1, col: 5 },
-      { direction: "horizontal", row: 5, col: 1 },
-      { direction: "vertical", row: 2, col: 9 },
-      { direction: "horizontal", row: 6, col: 9 },
-      { direction: "horizontal", row: 7, col: 3 },
-      { direction: "horizontal", row: 9, col: 6 },
-      { direction: "vertical", row: 6, col: 13 },
-      { direction: "horizontal", row: 10, col: 1 }
-    ];
+    const placementCount = 11;
+    const equationLength = 5;
+    let lastLayoutSignature = null;
 
     const inputs = [];
 
@@ -219,6 +209,83 @@
     const inputCell = (answer) => ({ type: "input", answer: String(answer) });
 
     const randomPick = (items) => items[Math.floor(Math.random() * items.length)];
+
+    const generateLayoutPlacements = () => {
+      const buildSignature = (placements) =>
+        placements.map((placement) => `${placement.direction}:${placement.row}:${placement.col}`).join("|");
+
+      const isWithinBounds = (row, col) => row >= 0 && row < rows && col >= 0 && col < cols;
+
+      const getCellsForPlacement = (placement) => {
+        const cells = [];
+        for (let index = 0; index < equationLength; index += 1) {
+          const row = placement.direction === "horizontal" ? placement.row : placement.row + index;
+          const col = placement.direction === "horizontal" ? placement.col + index : placement.col;
+          cells.push({ row, col });
+        }
+        return cells;
+      };
+
+      const hasAdjacentConnection = (cells, occupied) =>
+        cells.some(({ row, col }) => {
+          const neighbors = [
+            { row: row - 1, col },
+            { row: row + 1, col },
+            { row, col: col - 1 },
+            { row, col: col + 1 }
+          ];
+          return neighbors.some(
+            (neighbor) => isWithinBounds(neighbor.row, neighbor.col) && occupied[neighbor.row][neighbor.col]
+          );
+        });
+
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        const occupied = buildEmptyGrid().map((row) => row.map(() => false));
+        const placements = [];
+
+        for (let index = 0; index < placementCount; index += 1) {
+          let placed = false;
+          for (let tries = 0; tries < 200; tries += 1) {
+            const direction = Math.random() > 0.5 ? "horizontal" : "vertical";
+            const maxRow = direction === "horizontal" ? rows - 1 : rows - equationLength;
+            const maxCol = direction === "horizontal" ? cols - equationLength : cols - 1;
+            const row = Math.floor(Math.random() * (maxRow + 1));
+            const col = Math.floor(Math.random() * (maxCol + 1));
+            const placement = { direction, row, col };
+            const cells = getCellsForPlacement(placement);
+
+            if (cells.some(({ row: cellRow, col: cellCol }) => occupied[cellRow][cellCol])) {
+              continue;
+            }
+
+            if (index > 0 && !hasAdjacentConnection(cells, occupied)) {
+              continue;
+            }
+
+            cells.forEach(({ row: cellRow, col: cellCol }) => {
+              occupied[cellRow][cellCol] = true;
+            });
+            placements.push(placement);
+            placed = true;
+            break;
+          }
+
+          if (!placed) {
+            break;
+          }
+        }
+
+        if (placements.length === placementCount) {
+          const signature = buildSignature(placements);
+          if (signature !== lastLayoutSignature) {
+            lastLayoutSignature = signature;
+            return placements;
+          }
+        }
+      }
+
+      return [];
+    };
 
     const multiplicationPairs = [];
     for (let a = 1; a <= 10; a += 1) {
@@ -261,6 +328,10 @@
 
     const buildGrid = () => {
       const grid = buildEmptyGrid();
+      let layoutPlacements = generateLayoutPlacements();
+      while (layoutPlacements.length === 0) {
+        layoutPlacements = generateLayoutPlacements();
+      }
       layoutPlacements.forEach((placement) => {
         const equation = createEquation();
         if (placement.direction === "horizontal") {
